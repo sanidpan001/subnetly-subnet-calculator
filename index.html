@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Subnetly — IP Subnet Calculator with CIDR &amp; Subnet Splitter</title>
+<meta name="description" content="Subnetly is a free IP subnet calculator: enter CIDR or a dotted subnet mask and instantly get network, broadcast, first and last host, wildcard mask, host counts and a split-into-N-subnets view.">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body{font-family:'Space Grotesk',system-ui,sans-serif;background:#0B1526}
+  .mono{font-family:'JetBrains Mono',monospace}
+  .console{background:linear-gradient(160deg,#0F1E3A,#0B1526 60%);border:1px solid #1E3A5F;box-shadow:0 24px 60px rgba(2,8,23,.55)}
+  .led{width:9px;height:9px;border-radius:9999px}
+  input[type=range]{accent-color:#38BDF8}
+  .rowline{border-bottom:1px dashed #1E3A5F}
+</style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{"@type":"Question","name":"What is a subnet calculator used for?","acceptedAnswer":{"@type":"Answer","text":"A subnet calculator works out the network address, broadcast address, usable host range, subnet mask and wildcard mask for an IP address and prefix length, so you can plan address ranges without doing binary arithmetic by hand."}},
+{"@type":"Question","name":"What does CIDR notation like /24 mean?","acceptedAnswer":{"@type":"Answer","text":"CIDR notation appends a slash and a number to an IP address, such as 192.168.1.0/24. The number is the prefix length: it counts how many of the 32 bits are network bits. A /24 leaves 8 host bits, giving 256 addresses in total and 254 usable host addresses."}},
+{"@type":"Question","name":"What is the difference between a subnet mask and a wildcard mask?","acceptedAnswer":{"@type":"Answer","text":"A subnet mask marks network bits with 1s and host bits with 0s, for example 255.255.255.0 for a /24. A wildcard mask is the exact inverse — 0.0.0.255 for a /24 — and is used in Cisco access lists and OSPF statements to say which bits must match and which may vary."}},
+{"@type":"Question","name":"How many usable hosts are in a /25 or a /30?","acceptedAnswer":{"@type":"Answer","text":"A /25 has 128 addresses and 126 usable hosts. A /30 has 4 addresses and 2 usable hosts, which is why /30 blocks are popular for point-to-point router links. A /31 also provides 2 usable addresses on modern point-to-point links, and a /32 is a single host route."}},
+{"@type":"Question","name":"Can I enter a dotted subnet mask instead of CIDR?","acceptedAnswer":{"@type":"Answer","text":"Yes. Subnetly accepts both forms and converts between them in both directions. Type a mask such as 255.255.255.192 and Subnetly converts it to /26, or move the prefix slider and Subnetly shows the matching dotted mask and wildcard mask instantly."}},
+{"@type":"Question","name":"How does splitting a network into N subnets work?","acceptedAnswer":{"@type":"Answer","text":"Splitting borrows host bits to create more networks. To split a block into N subnets, Subnetly rounds N up to the next power of two, adds the borrowed bits to the prefix length, and lists every resulting subnet with its network address, broadcast address and usable host range."}}
+]}
+</script>
+</head>
+<body id="top" class="text-slate-200 min-h-screen">
+<header class="sticky top-0 z-40 bg-[#0B1526]/95 backdrop-blur border-b border-sky-900/60">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between">
+    <a href="#top" class="flex items-center gap-2.5">
+      <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-sky-500/15 border border-sky-400/40 text-sky-300 mono font-bold">⌗</span>
+      <span class="text-xl font-bold tracking-tight text-white">Subnet<span class="text-sky-400">ly</span></span>
+    </a>
+    <nav class="flex items-center gap-5 text-sm font-medium">
+      <a href="#top" class="text-slate-300 hover:text-sky-300">Home</a>
+      <a href="https://fixoraa.tech" class="text-slate-300 hover:text-sky-300">More Tools</a>
+    </nav>
+  </div>
+</header>
+
+<div class="no-print mx-auto max-w-6xl px-4 sm:px-6 pt-4" role="complementary" aria-label="Advertisement">
+  <div class="mx-auto text-center" style="max-width:728px">
+    <span class="block text-[10px] tracking-[0.18em] uppercase text-slate-400 mb-1.5">Advertisement</span>
+    <div class="flex justify-center overflow-hidden">
+      <div class="origin-top scale-[0.44] sm:scale-100 shrink-0">
+        <script>
+          atOptions = { 'key' : '4e68ac77881c17fe128a46565d9a4e8c', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+        </script>
+        <script src="https://www.highrevenueformat.com/4e68ac77881c17fe128a46565d9a4e8c/invoke.js"></script>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main class="mx-auto max-w-6xl px-4 sm:px-6 pb-10">
+  <section class="pt-8 pb-6">
+    <div class="flex flex-wrap items-center gap-3 mb-3">
+      <h1 class="text-3xl sm:text-4xl font-bold text-white">IP Subnet Calculator</h1>
+      <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-500/15 border border-sky-400/40 text-sky-300 text-xs font-semibold px-3 py-1"><span class="led bg-emerald-400 inline-block"></span>Unlimited Free Usage</span>
+    </div>
+    <p class="text-slate-400 max-w-2xl">A network console for address planning. Type an IP with CIDR or a dotted mask — Subnetly resolves the network, broadcast, host range, wildcard mask and splits the block for you, entirely in your browser.</p>
+  </section>
+
+  <section class="console rounded-2xl p-5 sm:p-7" aria-label="Subnet calculator console">
+    <div class="flex items-center gap-2 mb-5">
+      <span class="led bg-red-400 inline-block"></span><span class="led bg-amber-400 inline-block"></span><span class="led bg-emerald-400 inline-block"></span>
+      <span class="mono text-xs text-slate-400 ml-2">subnetly — network console</span>
+    </div>
+    <label class="block text-xs uppercase tracking-widest text-sky-300/80 font-semibold mb-1.5" for="cidrInput">IP address / CIDR</label>
+    <div class="flex flex-col sm:flex-row gap-3">
+      <input id="cidrInput" type="text" value="192.168.1.10/24" spellcheck="false" class="mono flex-1 bg-slate-950/70 border border-sky-900 rounded-xl px-4 py-3 text-sky-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="e.g. 10.0.0.5/16 or 172.16.4.9 255.255.240.0">
+      <button id="calcBtn" class="rounded-xl bg-sky-500 hover:bg-sky-400 text-white font-semibold px-6 py-3">Calculate</button>
+    </div>
+    <div class="flex flex-wrap gap-2 mt-3">
+      <button data-preset="192.168.1.10/24" class="preset mono text-xs rounded-lg border border-sky-900 bg-slate-900/60 px-3 py-1.5 hover:border-sky-400">192.168.1.10/24</button>
+      <button data-preset="10.20.30.40/8" class="preset mono text-xs rounded-lg border border-sky-900 bg-slate-900/60 px-3 py-1.5 hover:border-sky-400">10.20.30.40/8</button>
+      <button data-preset="172.16.5.9/30" class="preset mono text-xs rounded-lg border border-sky-900 bg-slate-900/60 px-3 py-1.5 hover:border-sky-400">172.16.5.9/30</button>
+      <button data-preset="203.0.113.77/27" class="preset mono text-xs rounded-lg border border-sky-900 bg-slate-900/60 px-3 py-1.5 hover:border-sky-400">203.0.113.77/27</button>
+    </div>
+    <p id="errorMsg" class="hidden mt-3 text-sm text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2"></p>
+    <div class="grid md:grid-cols-2 gap-6 mt-7">
+      <div>
+        <label class="block text-xs uppercase tracking-widest text-sky-300/80 font-semibold mb-1.5" for="prefixRange">Prefix length (CIDR)</label>
+        <div class="flex items-center gap-3">
+          <input id="prefixRange" type="range" min="0" max="32" value="24" class="flex-1">
+          <span class="mono text-sky-200 font-bold w-14 text-center bg-slate-950/70 border border-sky-900 rounded-lg py-1.5" id="prefixLabel">/24</span>
+        </div>
+        <label class="block text-xs uppercase tracking-widest text-sky-300/80 font-semibold mb-1.5 mt-5" for="maskInput">Dotted subnet mask</label>
+        <input id="maskInput" type="text" value="255.255.255.0" spellcheck="false" class="mono w-full bg-slate-950/70 border border-sky-900 rounded-xl px-4 py-3 text-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400">
+        <p class="text-xs text-slate-500 mt-2">CIDR ⇄ mask conversion runs both ways: edit either field and the other follows.</p>
+        <div class="mt-5 grid grid-cols-3 gap-3 text-center">
+          <div class="rounded-xl bg-slate-950/60 border border-sky-900/70 p-3"><div class="mono text-lg font-bold text-white" id="statTotal">256</div><div class="text-[11px] uppercase tracking-wider text-slate-400">Total addresses</div></div>
+          <div class="rounded-xl bg-slate-950/60 border border-sky-900/70 p-3"><div class="mono text-lg font-bold text-emerald-300" id="statUsable">254</div><div class="text-[11px] uppercase tracking-wider text-slate-400">Usable hosts</div></div>
+          <div class="rounded-xl bg-slate-950/60 border border-sky-900/70 p-3"><div class="mono text-lg font-bold text-sky-300" id="statClass">C</div><div class="text-[11px] uppercase tracking-wider text-slate-400">Class · <span id="statScope">Private</span></div></div>
+        </div>
+      </div>
+      <div>
+        <h2 class="text-xs uppercase tracking-widest text-sky-300/80 font-semibold mb-2">Resolved block</h2>
+        <div id="results" class="mono text-sm"></div>
+        <button id="copyBtn" class="mt-4 rounded-lg border border-sky-400/50 text-sky-300 hover:bg-sky-500/10 text-sm font-semibold px-4 py-2">Copy summary</button>
+        <span id="copyMsg" class="text-xs text-emerald-300 ml-2 hidden">Copied!</span>
+      </div>
+    </div>
+    <div class="mt-8 border-t border-sky-900/60 pt-6">
+      <h2 class="text-lg font-bold text-white mb-1">Split into N subnets</h2>
+      <p class="text-sm text-slate-400 mb-4">Borrow host bits and carve the current block into equal subnets. Counts round up to the next power of two.</p>
+      <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        <label class="text-sm text-slate-300" for="splitCount">Number of subnets</label>
+        <input id="splitCount" type="number" min="1" max="4096" value="4" class="mono w-28 bg-slate-950/70 border border-sky-900 rounded-xl px-4 py-2.5 text-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-400">
+        <button id="splitBtn" class="rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2.5">Split network</button>
+        <span id="splitInfo" class="mono text-xs text-sky-300"></span>
+      </div>
+      <p id="splitError" class="hidden mt-3 text-sm text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2"></p>
+      <div class="overflow-x-auto mt-4">
+        <table class="w-full text-sm mono min-w-[640px]">
+          <thead><tr class="text-left text-slate-400 text-xs uppercase tracking-wider"><th class="py-2 pr-3">#</th><th class="py-2 pr-3">Subnet (CIDR)</th><th class="py-2 pr-3">First host</th><th class="py-2 pr-3">Last host</th><th class="py-2 pr-3">Broadcast</th><th class="py-2">Usable</th></tr></thead>
+          <tbody id="splitBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="mt-10 bg-white rounded-2xl p-6 sm:p-10 text-slate-700 shadow-xl" id="article">
+    <article class="prose max-w-none">
+      <h2 class="text-2xl font-bold text-slate-900 mb-4">IP Subnetting Explained: Networks, Masks, CIDR and How to Split Address Blocks</h2>
+      <p>Every device on an IP network needs an address, and every network needs a plan for how those addresses are divided. Subnetting is that plan. It takes one large block of IPv4 addresses and carves it into smaller, manageable networks — subnets — each with its own network address, broadcast address and range of assignable host addresses. Subnetly exists to make that carving instant: you supply an IP address and either a CIDR prefix or a dotted subnet mask, and the calculator resolves every boundary of the block for you, with no binary arithmetic and no spreadsheet formulas.</p>
+      <h3 class="text-xl font-bold text-slate-900 mt-6 mb-2">The anatomy of an IPv4 address</h3>
+      <p>An IPv4 address is a 32-bit number, conventionally written as four decimal octets separated by dots, such as 192.168.1.10. Each octet holds eight bits, so each ranges from 0 to 255. Conceptually the address has two parts: a network portion that identifies which network the device belongs to, and a host portion that identifies the individual device inside that network. The dividing line between the two portions is not fixed — it is defined by the subnet mask or, equivalently, by the CIDR prefix length. Moving that dividing line is the entire mechanics of subnetting: shift it right and you get more, smaller networks; shift it left and you get fewer, larger ones.</p>
+      <p>Historically, addresses were grouped into classes. Class A networks start with a first octet from 0 to 127 and were designed for a handful of enormous organisations. Class B covers 128 to 191, and Class C covers 192 to 223, with a default mask of 255.255.255.0 that yields 254 usable hosts. Class D is reserved for multicast and Class E for experimental use. Classful networking has long since been replaced by classless routing, but the classes still appear in exams and in the way people casually describe address ranges, which is why Subnetly reports the class of the address you enter alongside its modern CIDR interpretation.</p>
+      <h3 class="text-xl font-bold text-slate-900 mt-6 mb-2">Subnet masks and CIDR notation</h3>
+      <p>A subnet mask is a 32-bit value whose binary form is a run of 1s followed by a run of 0s. The 1s cover the network portion; the 0s cover the host portion. The mask 255.255.255.0, for example, is twenty-four 1s followed by eight 0s. CIDR notation simply counts the 1s: that mask is written as /24. The two forms are fully interchangeable, and Subnetly converts between them in both directions — type a dotted mask and it shows you the prefix, drag the prefix slider and it shows you the mask. Not every dotted quad is a valid mask, however. Because the 1s must be contiguous, a value like 255.255.0.255 is invalid, and Subnetly will tell you so instead of silently producing nonsense.</p>
+      <p>From the mask, every other boundary of the subnet follows mechanically. The network address is the result of AND-ing the IP address with the mask: host bits are cleared to zero, giving the lowest address in the block. The broadcast address is the exact opposite: keep the network bits, set every host bit to 1, giving the highest address in the block. The usable host range sits between them — normally from network-plus-one to broadcast-minus-one — because the two extreme addresses are reserved for identifying the network itself and for broadcasting to every host on it. The total number of addresses in a block is two raised to the power of the number of host bits, so a /24 has 256 addresses, a /16 has 65,536, and a tiny /30 has just four.</p>
+      <h3 class="text-xl font-bold text-slate-900 mt-6 mb-2">The wildcard mask and where it appears</h3>
+      <p>The wildcard mask is the bitwise inverse of the subnet mask: where the subnet mask has 1s, the wildcard has 0s, and vice versa. A /24 therefore has a wildcard mask of 0.0.0.255, and a /26 has 0.0.0.63. Wildcard masks feel backwards the first time you meet them, but they answer a natural question in access control lists and routing protocols: which bits of an address must match exactly, and which bits are allowed to vary? In Cisco IOS access lists and in OSPF network statements, a wildcard bit of 0 means "this bit must match" and a wildcard bit of 1 means "do not care". Subnetly displays the wildcard mask next to every calculation so you can paste it straight into a router configuration without inverting the mask by hand.</p>
+      <h3 class="text-xl font-bold text-slate-900 mt-6 mb-2">Special cases: /31 and /32</h3>
+      <p>The familiar rule "subtract two for the network and broadcast addresses" breaks down at the very small end of the scale. A /32 has a single address: it is a host route, identifying exactly one device, and it appears in routing tables, loopback addressing and firewall rules. A /31 has two addresses and, under the original rules, zero usable hosts once network and broadcast are reserved — a wasteful outcome for a point-to-point link that needs exactly two addresses, one for each end. RFC 3021 therefore permits /31 blocks on point-to-point links where both addresses are usable, and modern equipment supports this widely. Subnetly handles both cases explicitly: for a /31 it reports two usable addresses, and for a /32 it reports one, rather than showing a confusing negative or zero host count.</p>
+      <h3 class="text-xl font-bold text-slate-900 mt-6 mb-2">Private and public address space</h3>
+      <p>Not every address can appear on the public internet. RFC 1918 reserves three ranges for private use inside homes, offices and cloud virtual networks: 10.0.0.0/8, 172.16.0.0/12 and 192.168.0.0/16. Devices on private addresses reach the internet through network address translation at a router or gateway, which rewrites their private source address to a public one. Other ranges are special too: 127.0.0.0/8 is loopback, 169.254.0.0/16 is link-local addressing assigned when DHCP fails, and 100.64.0.0/10 is shared address space used by carriers for carrier-grade NAT. Subnetly flags whether the address you enter is private, because the answer changes how you should plan: private blocks can be subnetted however you like without asking anyone, while public blocks are allocated by registries and are precious.</p>
+      <h3 class="text-xl font-bold text-slate-900 mt-6 mb-2">Splitting a network into N subnets</h3>
+      <p>The most common subnetting task is division: you hold one block and need several equal networks — one per office floor, per department, per VLAN or per customer. The method is called borrowing bits. To create N subnets you borrow enough host bits so that two raised to the borrowed count is at least N; the borrowed bits join the network portion, so the prefix length grows. Splitting a /24 into four subnets borrows two bits, produces four /26 blocks of 64 addresses each, and Subnetly lists all of them with their network addresses, host ranges and broadcast addresses. If you ask for five subnets, the maths rounds up to eight — subnets always come in powers of two when they are equal-sized — and the calculator makes that rounding visible rather than hiding it.</p>
+      <p>Equal splits are simple, but real networks are rarely equal. A head office might need 500 addresses while a branch needs 20. The technique for that is variable length subnet masking, or VLSM: allocate the largest block first, then carve the next block from the remaining space, always keeping new blocks aligned on their natural boundaries. Alignment is the subtle part — a /26 must start at an address whose last octet is a multiple of 64 — and it is exactly the kind of detail a calculator is good at enforcing. Even if you plan with VLSM on paper, running each resulting block through a calculator like Subnetly is a cheap sanity check before you commit the plan to routers and DHCP servers.</p>
+      <h3 class="text-xl font-bold text-slate-900 mt-6 mb-2">Why subnet at all?</h3>
+      <p>Subnetting is not just an addressing ritual; it buys real operational benefits. Smaller broadcast domains mean less chatter: broadcast and multicast traffic stays inside one subnet instead of washing over every device in a building. Subnets create natural security boundaries — you can place firewall rules between the guest Wi-Fi subnet and the servers subnet, and a compromised device can only wander within its own segment. They make routing tables smaller through aggregation, they let DHCP scopes map cleanly onto physical locations, and they make troubleshooting easier because an IP address itself tells you where a device is supposed to be. Good subnet planning, verified with a calculator, prevents the two classic failures: running out of addresses in a growing department, and wasting a huge block on a link that needed four addresses.</p>
+      <h3 class="text-xl font-bold text-slate-900 mt-6 mb-2">Reading binary without fear</h3>
+      <p>Subnetly also shows the binary form of your address and mask, because binary is where subnetting stops being memorised rules and starts being obvious. When you see the mask as twenty-four 1s and eight 0s lined up under the address, the network address is just "copy the bits where the mask has 1s, zero the rest". Borrowing bits for a split is literally watching the boundary move one column to the right. You do not need to work in binary daily — the calculator does that — but glancing at it when a result surprises you is the fastest way to understand why the result is what it is. Most subnetting mistakes, from misaligned blocks to masks that are not contiguous, become visible at a glance in binary.</p>
+      <p>Whether you are studying for a networking exam, designing a cloud VPC, segmenting a home lab or double-checking a change window at 2 a.m., the workflow is the same: enter the address, choose the prefix or mask, read the boundaries, split if you need to, and copy the summary into your documentation. Subnetly does all of it locally in your browser, instantly, for free.</p>
+      <h3 class="text-xl font-bold text-slate-900 mt-8 mb-3">Frequently asked questions</h3>
+      <div class="space-y-4">
+        <div><h4 class="font-semibold text-slate-900">What is a subnet calculator used for?</h4><p>A subnet calculator works out the network address, broadcast address, usable host range, subnet mask and wildcard mask for an IP address and prefix length, so you can plan address ranges without doing binary arithmetic by hand.</p></div>
+        <div><h4 class="font-semibold text-slate-900">What does CIDR notation like /24 mean?</h4><p>CIDR notation appends a slash and a number to an IP address, such as 192.168.1.0/24. The number is the prefix length: it counts how many of the 32 bits are network bits. A /24 leaves 8 host bits, giving 256 addresses in total and 254 usable host addresses.</p></div>
+        <div><h4 class="font-semibold text-slate-900">What is the difference between a subnet mask and a wildcard mask?</h4><p>A subnet mask marks network bits with 1s and host bits with 0s, for example 255.255.255.0 for a /24. A wildcard mask is the exact inverse — 0.0.0.255 for a /24 — and is used in Cisco access lists and OSPF statements to say which bits must match and which may vary.</p></div>
+        <div><h4 class="font-semibold text-slate-900">How many usable hosts are in a /25 or a /30?</h4><p>A /25 has 128 addresses and 126 usable hosts. A /30 has 4 addresses and 2 usable hosts, which is why /30 blocks are popular for point-to-point router links. A /31 also provides 2 usable addresses on modern point-to-point links, and a /32 is a single host route.</p></div>
+        <div><h4 class="font-semibold text-slate-900">Can I enter a dotted subnet mask instead of CIDR?</h4><p>Yes. Subnetly accepts both forms and converts between them in both directions. Type a mask such as 255.255.255.192 and Subnetly converts it to /26, or move the prefix slider and Subnetly shows the matching dotted mask and wildcard mask instantly.</p></div>
+        <div><h4 class="font-semibold text-slate-900">How does splitting a network into N subnets work?</h4><p>Splitting borrows host bits to create more networks. To split a block into N subnets, Subnetly rounds N up to the next power of two, adds the borrowed bits to the prefix length, and lists every resulting subnet with its network address, broadcast address and usable host range.</p></div>
+      </div>
+    </article>
+  </section>
+</main>
+
+<div class="no-print mx-auto max-w-6xl px-4 sm:px-6 pb-4" role="complementary" aria-label="Advertisement">
+  <div class="mx-auto text-center" style="max-width:728px">
+    <span class="block text-[10px] tracking-[0.18em] uppercase text-slate-400 mb-1.5">Advertisement</span>
+    <div class="flex justify-center overflow-hidden">
+      <script async src="https://js.wpadmngr.com/static/adManager.js" data-admpid="464498"></script>
+    </div>
+  </div>
+</div>
+
+<footer class="border-t border-sky-900/60 mt-4">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-sm text-slate-400">
+    <span>Subnetly — IP subnet calculator. Runs 100% in your browser.</span>
+    <span class="mono text-xs">CIDR · masks · wildcard · subnet splitting</span>
+  </div>
+<p class="fx-credit" style="text-align:center;font-size:12.5px;opacity:.62;margin:10px auto 2px;letter-spacing:.01em">Made by <a href="https://fixoraa.tech" target="_blank" rel="noopener" style="color:inherit;font-weight:700;text-decoration:underline;text-underline-offset:2px">Fixoraa</a></p>
+</footer>
+
+<script id="lib-subnetly">
+var SubnetlyLib = (function () {
+  function isValidIp(str) {
+    if (typeof str !== 'string') return false;
+    var parts = str.trim().split('.');
+    if (parts.length !== 4) return false;
+    for (var i = 0; i < 4; i++) {
+      if (!/^\d{1,3}$/.test(parts[i])) return false;
+      if (parts[i].length > 1 && parts[i].charAt(0) === '0') return false;
+      var n = Number(parts[i]);
+      if (n < 0 || n > 255) return false;
+    }
+    return true;
+  }
+  function ipToInt(str) {
+    if (!isValidIp(str)) return null;
+    var p = str.trim().split('.').map(Number);
+    return (((p[0] * 256 + p[1]) * 256 + p[2]) * 256 + p[3]) >>> 0;
+  }
+  function intToIp(n) {
+    if (typeof n !== 'number' || !isFinite(n) || n < 0 || n > 4294967295) return null;
+    n = Math.floor(n) >>> 0;
+    return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.');
+  }
+  function prefixToMask(prefix) {
+    if (typeof prefix !== 'number' || prefix % 1 !== 0 || prefix < 0 || prefix > 32) return null;
+    if (prefix === 0) return '0.0.0.0';
+    var mask = (0xFFFFFFFF << (32 - prefix)) >>> 0;
+    return intToIp(mask);
+  }
+  function maskToPrefix(maskStr) {
+    if (!isValidIp(maskStr)) return null;
+    var m = ipToInt(maskStr);
+    var inv = (~m) >>> 0;
+    // contiguous check: inverted mask must be of form 2^k - 1
+    if ((inv & (inv + 1)) !== 0) return null;
+    var count = 0, x = m;
+    for (var i = 0; i < 32; i++) { if (x & 0x80000000) count++; x = (x << 1) >>> 0; }
+    return count;
+  }
+  function wildcardMask(prefix) {
+    var maskStr = prefixToMask(prefix);
+    if (maskStr === null) return null;
+    var m = ipToInt(maskStr);
+    return intToIp((~m) >>> 0);
+  }
+  function ipClass(ipStr) {
+    if (!isValidIp(ipStr)) return null;
+    var first = Number(ipStr.trim().split('.')[0]);
+    if (first < 128) return 'A';
+    if (first < 192) return 'B';
+    if (first < 224) return 'C';
+    if (first < 240) return 'D (multicast)';
+    return 'E (experimental)';
+  }
+  function isPrivate(ipStr) {
+    var n = ipToInt(ipStr);
+    if (n === null) return null;
+    var a = (n >>> 24) & 255, b = (n >>> 16) & 255;
+    if (a === 10) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    return false;
+  }
+  function toBinary(ipStr) {
+    if (!isValidIp(ipStr)) return null;
+    return ipStr.trim().split('.').map(function (o) {
+      var s = Number(o).toString(2);
+      while (s.length < 8) s = '0' + s;
+      return s;
+    }).join('.');
+  }
+  function parseCidr(str) {
+    if (typeof str !== 'string') return null;
+    var s = str.trim();
+    if (!s) return null;
+    var slash = s.split('/');
+    if (slash.length === 2) {
+      var ip = slash[0].trim();
+      var pPart = slash[1].trim();
+      if (!isValidIp(ip)) return null;
+      if (/^\d{1,2}$/.test(pPart)) {
+        var p = Number(pPart);
+        if (p < 0 || p > 32) return null;
+        return { ip: ip, prefix: p };
+      }
+      var mp = maskToPrefix(pPart);
+      if (mp === null) return null;
+      return { ip: ip, prefix: mp };
+    }
+    // space separated dotted mask
+    var sp = s.split(/\s+/);
+    if (sp.length === 2) {
+      if (!isValidIp(sp[0])) return null;
+      var mp2 = maskToPrefix(sp[1]);
+      if (mp2 === null) return null;
+      return { ip: sp[0], prefix: mp2 };
+    }
+    if (isValidIp(s)) return { ip: s, prefix: 24 };
+    return null;
+  }
+  function calculate(ipStr, prefix) {
+    if (!isValidIp(ipStr)) return null;
+    if (typeof prefix !== 'number' || prefix % 1 !== 0 || prefix < 0 || prefix > 32) return null;
+    var ip = ipToInt(ipStr);
+    var maskStr = prefixToMask(prefix);
+    var mask = ipToInt(maskStr);
+    var network = (ip & mask) >>> 0;
+    var wildcard = (~mask) >>> 0;
+    var broadcast = (network | wildcard) >>> 0;
+    var total = Math.pow(2, 32 - prefix);
+    var first, last, usable;
+    if (prefix === 32) { first = network; last = network; usable = 1; }
+    else if (prefix === 31) { first = network; last = broadcast; usable = 2; }
+    else { first = network + 1; last = broadcast - 1; usable = total - 2; }
+    return {
+      ip: intToIp(ip), prefix: prefix, mask: maskStr, wildcard: intToIp(wildcard),
+      network: intToIp(network), broadcast: intToIp(broadcast),
+      firstHost: intToIp(first), lastHost: intToIp(last),
+      totalAddresses: total, usableHosts: usable,
+      cidr: intToIp(network) + '/' + prefix,
+      ipClass: ipClass(ipStr), isPrivate: isPrivate(ipStr),
+      binaryIp: toBinary(ipStr), binaryMask: toBinary(maskStr)
+    };
+  }
+  function splitSubnets(ipStr, prefix, count) {
+    if (!isValidIp(ipStr)) return null;
+    if (typeof prefix !== 'number' || prefix < 0 || prefix > 32) return null;
+    if (typeof count !== 'number' || count % 1 !== 0 || count < 1) return null;
+    var bits = Math.ceil(Math.log2(count));
+    if (count === 1) bits = 0;
+    var newPrefix = prefix + bits;
+    if (newPrefix > 32) return null;
+    var actual = Math.pow(2, bits);
+    var base = calculate(ipStr, prefix);
+    if (!base) return null;
+    var networkInt = ipToInt(base.network);
+    var size = Math.pow(2, 32 - newPrefix);
+    var out = [];
+    for (var i = 0; i < actual; i++) {
+      var start = networkInt + i * size;
+      var c = calculate(intToIp(start), newPrefix);
+      out.push({ index: i + 1, cidr: c.cidr, network: c.network, broadcast: c.broadcast, firstHost: c.firstHost, lastHost: c.lastHost, usableHosts: c.usableHosts });
+    }
+    return { newPrefix: newPrefix, requested: count, count: actual, subnets: out };
+  }
+  return {
+    isValidIp: isValidIp, ipToInt: ipToInt, intToIp: intToIp,
+    prefixToMask: prefixToMask, maskToPrefix: maskToPrefix, wildcardMask: wildcardMask,
+    ipClass: ipClass, isPrivate: isPrivate, toBinary: toBinary,
+    parseCidr: parseCidr, calculate: calculate, splitSubnets: splitSubnets
+  };
+})();
+if (typeof module !== 'undefined' && module.exports) { module.exports = SubnetlyLib; }
+
+</script>
+<script>
+(function(){
+  var L = SubnetlyLib;
+  var cidrInput = document.getElementById('cidrInput');
+  var maskInput = document.getElementById('maskInput');
+  var prefixRange = document.getElementById('prefixRange');
+  var prefixLabel = document.getElementById('prefixLabel');
+  var errorMsg = document.getElementById('errorMsg');
+  var results = document.getElementById('results');
+  var current = null;
+  function row(label, value, accent){
+    return '<div class="rowline flex flex-wrap justify-between gap-2 py-2"><span class="text-slate-400 text-xs uppercase tracking-wider pt-0.5">'+label+'</span><span class="font-semibold '+(accent||'text-sky-100')+' break-all">'+value+'</span></div>';
+  }
+  function render(){
+    var parsed = L.parseCidr(cidrInput.value);
+    errorMsg.classList.add('hidden');
+    if(!parsed){
+      errorMsg.textContent = 'Please enter a valid IPv4 address, optionally with /prefix or a dotted mask — for example 192.168.1.10/24.';
+      errorMsg.classList.remove('hidden');
+      results.innerHTML = '<p class="text-slate-500 py-4">No valid network yet. Fix the address above and the resolved block will appear here.</p>';
+      current = null;
+      return;
+    }
+    var prefix = Number(prefixRange.value);
+    var calc = L.calculate(parsed.ip, prefix);
+    if(!calc){ return; }
+    current = { ip: parsed.ip, prefix: prefix, calc: calc };
+    prefixLabel.textContent = '/'+prefix;
+    if(document.activeElement !== maskInput){ maskInput.value = calc.mask; }
+    results.innerHTML =
+      row('IP address', calc.ip) +
+      row('CIDR notation', calc.cidr, 'text-sky-300') +
+      row('Network address', calc.network, 'text-emerald-300') +
+      row('Broadcast address', calc.broadcast, 'text-amber-300') +
+      row('First usable host', calc.firstHost) +
+      row('Last usable host', calc.lastHost) +
+      row('Subnet mask', calc.mask) +
+      row('Wildcard mask', calc.wildcard, 'text-violet-300') +
+      row('Binary IP', calc.binaryIp) +
+      row('Binary mask', calc.binaryMask);
+    document.getElementById('statTotal').textContent = calc.totalAddresses.toLocaleString('en-US');
+    document.getElementById('statUsable').textContent = calc.usableHosts.toLocaleString('en-US');
+    document.getElementById('statClass').textContent = calc.ipClass.charAt(0);
+    document.getElementById('statScope').textContent = calc.isPrivate ? 'Private' : 'Public';
+  }
+  function syncFromCidr(){
+    var parsed = L.parseCidr(cidrInput.value);
+    if(parsed){ prefixRange.value = parsed.prefix; }
+    render();
+  }
+  document.getElementById('calcBtn').addEventListener('click', syncFromCidr);
+  cidrInput.addEventListener('input', syncFromCidr);
+  prefixRange.addEventListener('input', function(){ render(); });
+  maskInput.addEventListener('input', function(){
+    var p = L.maskToPrefix(maskInput.value.trim());
+    if(p === null){
+      errorMsg.textContent = 'That is not a valid contiguous subnet mask. Masks must be a run of 1s followed by 0s, e.g. 255.255.255.192.';
+      errorMsg.classList.remove('hidden');
+      return;
+    }
+    prefixRange.value = p;
+    render();
+  });
+  document.querySelectorAll('.preset').forEach(function(b){
+    b.addEventListener('click', function(){ cidrInput.value = b.getAttribute('data-preset'); syncFromCidr(); });
+  });
+  document.getElementById('copyBtn').addEventListener('click', function(){
+    if(!current) return;
+    var c = current.calc;
+    var text = 'Subnetly summary\nCIDR: '+c.cidr+'\nNetwork: '+c.network+'\nBroadcast: '+c.broadcast+'\nHosts: '+c.firstHost+' - '+c.lastHost+' ('+c.usableHosts+' usable)\nMask: '+c.mask+'\nWildcard: '+c.wildcard;
+    function done(){ var m=document.getElementById('copyMsg'); m.classList.remove('hidden'); setTimeout(function(){m.classList.add('hidden');},1800); }
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done).catch(done); } else { done(); }
+  });
+  document.getElementById('splitBtn').addEventListener('click', function(){
+    var err = document.getElementById('splitError');
+    var info = document.getElementById('splitInfo');
+    var body = document.getElementById('splitBody');
+    err.classList.add('hidden'); body.innerHTML=''; info.textContent='';
+    if(!current){
+      err.textContent = 'Calculate a valid network first, then split it.';
+      err.classList.remove('hidden'); return;
+    }
+    var n = Number(document.getElementById('splitCount').value);
+    if(!n || n < 1 || n % 1 !== 0){
+      err.textContent = 'Enter a whole number of subnets, 1 or more.';
+      err.classList.remove('hidden'); return;
+    }
+    if(n > 4096){
+      err.textContent = 'Please split into at most 4096 subnets so the table stays readable.';
+      err.classList.remove('hidden'); return;
+    }
+    var res = L.splitSubnets(current.ip, current.prefix, n);
+    if(!res){
+      err.textContent = 'This network is too small to split that many ways — the new prefix would exceed /32.';
+      err.classList.remove('hidden'); return;
+    }
+    info.textContent = res.count + ' subnets at /' + res.newPrefix + (res.count !== res.requested ? ' (rounded up from '+res.requested+')' : '');
+    var show = res.subnets.slice(0, 256);
+    body.innerHTML = show.map(function(s){
+      return '<tr class="rowline"><td class="py-2 pr-3 text-slate-400">'+s.index+'</td><td class="py-2 pr-3 text-sky-200">'+s.cidr+'</td><td class="py-2 pr-3">'+s.firstHost+'</td><td class="py-2 pr-3">'+s.lastHost+'</td><td class="py-2 pr-3">'+s.broadcast+'</td><td class="py-2">'+s.usableHosts+'</td></tr>';
+    }).join('');
+    if(res.subnets.length > show.length){
+      body.innerHTML += '<tr><td colspan="6" class="py-2 text-slate-400">Showing first 256 of '+res.subnets.length+' subnets.</td></tr>';
+    }
+  });
+  syncFromCidr();
+  document.getElementById('splitBtn').click();
+})();
+</script>
+</body>
+</html>
